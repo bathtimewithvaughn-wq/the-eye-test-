@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temp files
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Output videos
+output/*.mp4
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config with personal data
+config/settings.json
+
+# Screenshots folder (add manually)
+screenshots/
+release/TheEyeTest_v1.0.zip
+release/TheEyeTest/*.exe
+*.exe
+*.zip
+*.exe
+*.zip
+release/TheEyeTest/*.exe
