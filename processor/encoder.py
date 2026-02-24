@@ -262,11 +262,7 @@ class VideoProcessor:
             # KEY: addWeighted preserves original frame color, adds edges at opacity
             cartoon_frame = cv2.addWeighted(frame, 1.0, edge_colored, edge_opacity, 0)
             
-            # Add grain for copyright avoidance
-            grain_strength = self.COPYRIGHT_AVOIDANCE['grain_strength']
-            if grain_strength > 0:
-                noise = np.random.normal(0, grain_strength, cartoon_frame.shape).astype(np.float32)
-                cartoon_frame = np.clip(cartoon_frame.astype(np.float32) + noise, 0, 255).astype(np.uint8)
+            # Grain moved to FFmpeg for speed (was slow in Python)
             
             out.write(cartoon_frame)
             frame_count += 1
@@ -340,6 +336,11 @@ class VideoProcessor:
             # Add black border, then crop back to original size (shifts content)
             filters.append(f"pad={width+2*border}:{height+2*border}:{border}:{border}:black,crop={width}:{height}:{border}:{border}")
         
+        # Copyright avoidance: Grain (moved from OpenCV for speed)
+        grain_strength = self.COPYRIGHT_AVOIDANCE['grain_strength']
+        if grain_strength > 0:
+            filters.append(f"noise=alls={grain_strength}:allf=t")
+        
         # Speed change is handled via setpts in filter
         speed = self.COPYRIGHT_AVOIDANCE['speed']
         setpts_val = 1.0 / speed  # e.g., 1/1.12 = 0.893
@@ -348,7 +349,7 @@ class VideoProcessor:
         filter_str = f"setpts={setpts_val:.3f}*PTS,{filter_str}"
         
         print(f"[DEBUG] FFmpeg filter: {filter_str}")
-        print(f"[DEBUG] Copyright avoidance: speed={speed}x, zoom={zoom}x, rotation={rotation}°, border={border}px, grain in OpenCV")
+        print(f"[DEBUG] Copyright avoidance: speed={speed}x, zoom={zoom}x, rotation={rotation}°, border={border}px, grain={grain_strength}")
         
         # Check if logo exists
         logo_path = self.LOGO_PATH
