@@ -296,6 +296,9 @@ class VideoProcessor:
         # Build filter chain for -vf (simple filters)
         filters = []
         
+        # Upscale from 720p back to original resolution FIRST
+        filters.append(f"scale={width}:{height}:flags=lanczos")
+        
         # Color filter
         if self.filter_name in self.FILTER_PRESETS:
             filters.append(self.FILTER_PRESETS[self.filter_name]["ffmpeg"])
@@ -347,9 +350,6 @@ class VideoProcessor:
         grain_strength = self.COPYRIGHT_AVOIDANCE['grain_strength']
         if grain_strength > 0:
             filters.append(f"noise=alls={grain_strength}:allf=t")
-        
-        # Upscale from 720p back to original resolution
-        filters.append(f"scale={width}:{height}:flags=lanczos")
         
         # Speed change is handled via setpts in filter
         speed = self.COPYRIGHT_AVOIDANCE['speed']
