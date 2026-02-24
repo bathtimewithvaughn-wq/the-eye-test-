@@ -30,7 +30,7 @@ class VideoProcessor:
     FILTER_PRESETS = {
         "WARM": {
             "description": "Warm tones, boosted saturation",
-            "ffmpeg": "colorbalance=rm=0.12:bm=-0.12,hue=s=1.40,format=yuv420p,lutyuv=y=val*1.30"
+            "ffmpeg": "colorbalance=rm=0.12:bm=-0.12,hue=s=1.30,format=yuv420p,lutyuv=y=val*1.30"
         },
         "COOL": {
             "description": "Cool tones, reduced saturation", 
@@ -378,6 +378,7 @@ class VideoProcessor:
                 '-filter_complex', filter_complex,
                 '-c:v', video_codec,
                 *video_args,
+                '-threads', '4',  # Limit threads for lower temps
                 '-c:a', 'aac',
                 '-b:a', '128k',
                 '-af', 'volume=0',
@@ -392,6 +393,7 @@ class VideoProcessor:
                 '-vf', filter_str,
                 '-c:v', video_codec,
                 *video_args,
+                '-threads', '4',  # Limit threads for lower temps
                 '-c:a', 'aac',
                 '-b:a', '128k',
                 '-af', 'volume=0',
@@ -403,13 +405,20 @@ class VideoProcessor:
             env = os.environ.copy()
             env['PYTHONIOENCODING'] = 'utf-8'
             
+            # Hide console window on Windows
+            startupinfo = None
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            
             process = subprocess.Popen(
                 cmd,
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
                 encoding='utf-8',
                 errors='ignore',
-                env=env
+                env=env,
+                startupinfo=startupinfo
             )
             
             error_log = []
