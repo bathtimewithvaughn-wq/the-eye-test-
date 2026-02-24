@@ -4,6 +4,7 @@ Video downloader with yt-dlp and retry logic
 
 import subprocess
 import os
+import sys
 import shutil
 from pathlib import Path
 
@@ -48,8 +49,9 @@ class VideoDownloader:
         
         for attempt in range(max_retries):
             try:
+                # Use sys.executable to ensure bundled yt-dlp module works in PyInstaller exe
                 cmd = [
-                    "yt-dlp",
+                    sys.executable, "-m", "yt_dlp",
                     "-f", format_str,
                     "--merge-output-format", "mp4",
                     "-o", output_template,
