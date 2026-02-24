@@ -1,16 +1,15 @@
 """
-Video downloader with yt-dlp and retry logic
+Video downloader with yt-dlp library (not subprocess)
 """
 
-import subprocess
 import os
-import sys
 import shutil
 from pathlib import Path
+import yt_dlp
 
 
 class VideoDownloader:
-    """Download videos from YouTube with retry logic"""
+    """Download videos from YouTube using yt-dlp library"""
     
     def __init__(self, output_dir: str = "temp"):
         self.output_dir = Path(output_dir)
@@ -18,7 +17,7 @@ class VideoDownloader:
     
     def download(self, url: str, quality: str = "480", max_retries: int = 3) -> str | None:
         """
-        Download video from URL.
+        Download video from URL using yt-dlp library.
         
         Args:
             url: YouTube URL or local file path
@@ -32,11 +31,6 @@ class VideoDownloader:
         if os.path.exists(url):
             return url
         
-        # Force UTF-8 environment for subprocess
-        env = os.environ.copy()
-        env['PYTHONIOENCODING'] = 'utf-8'
-        env['LC_ALL'] = 'en_US.UTF-8'
-        
         # Determine format string
         if quality == "480":
             format_str = "bestvideo[height<=480]+bestaudio/best[height<=480]"
@@ -49,46 +43,39 @@ class VideoDownloader:
         
         for attempt in range(max_retries):
             try:
-                # Use sys.executable to ensure bundled yt-dlp module works in PyInstaller exe
-                cmd = [
-                    sys.executable, "-m", "yt_dlp",
-                    "-f", format_str,
-                    "--merge-output-format", "mp4",
-                    "-o", output_template,
-                    "--no-playlist",
-                    url
-                ]
+                print(f"[DEBUG] Download attempt {attempt + 1}/{max_retries}: {url}")
                 
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    encoding='utf-8',
-                    errors='ignore',
-                    env=env,
-                    timeout=300
-                )
+                # Use yt-dlp as a library (works in PyInstaller bundle)
+                ydl_opts = {
+                    'format': format_str,
+                    'outtmpl': output_template,
+                    'merge_output_format': 'mp4',
+                    'noplaylist': True,
+                    'quiet': False,
+                    'no_warnings': False,
+                }
                 
-                if result.returncode == 0:
-                    # Find the downloaded file
-                    for f in self.output_dir.glob(f"*{suffix}.mp4"):
-                        if quality == "1080":
-                            return str(f.resolve())
-                        if "_preview.wmv" in str(f):
-                            return str(f.resolve())
-                        return self._reencode_for_preview(str(f.resolve()))
-                    
-                    # Try to find any mp4 if suffix pattern didn't match
-                    for f in sorted(self.output_dir.glob("*.mp4"), key=os.path.getmtime, reverse=True):
-                        if quality == "1080":
-                            return str(f.resolve())
-                        if "_preview.wmv" in str(f):
-                            return str(f.resolve())
-                        return self._reencode_for_preview(str(f.resolve()))
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
                 
-            except subprocess.TimeoutExpired:
-                continue
-            except Exception:
+                # Find the downloaded file
+                for f in self.output_dir.glob(f"*{suffix}.mp4"):
+                    if quality == "1080":
+                        return str(f.resolve())
+                    if "_preview.wmv" in str(f):
+                        return str(f.resolve())
+                    return self._reencode_for_preview(str(f.resolve()))
+                
+                # Try to find any mp4 if suffix pattern didn't match
+                for f in sorted(self.output_dir.glob("*.mp4"), key=os.path.getmtime, reverse=True):
+                    if quality == "1080":
+                        return str(f.resolve())
+                    if "_preview.wmv" in str(f):
+                        return str(f.resolve())
+                    return self._reencode_for_preview(str(f.resolve()))
+                
+            except Exception as e:
+                print(f"[DEBUG] Download error: {e}")
                 continue
         
         return None
@@ -110,17 +97,13 @@ class VideoDownloader:
         
         output_path = input_path.replace(".mp4", "_preview.wmv")
         
-        # Force UTF-8 environment
-        env = os.environ.copy()
-        env['PYTHONIOENCODING'] = 'utf-8'
-        env['LC_ALL'] = 'en_US.UTF-8'
-        
         # Find ffmpeg
         ffmpeg_path = self._find_ffmpeg()
         if not ffmpeg_path:
             print("[DEBUG] ffmpeg not found, returning original file")
             return input_path
             
+        import subprocess
         cmd = [
             ffmpeg_path,
             "-i", input_path,
@@ -140,7 +123,6 @@ class VideoDownloader:
                 text=True, 
                 encoding='utf-8',
                 errors='ignore',
-                env=env,
                 timeout=300
             )
             if result.returncode == 0 and os.path.exists(output_path):
@@ -157,19 +139,6 @@ class VideoDownloader:
             print(f"[DEBUG] Re-encode error: {e}")
         
         return input_path
-    
-    def _check_codec(self, ffmpeg_path: str, codec: str) -> bool:
-        """Check if ffmpeg has a specific codec"""
-        try:
-            result = subprocess.run(
-                [ffmpeg_path, "-hide_banner", "-encoders"],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            return codec in result.stdout
-        except:
-            return False
     
     def _find_ffmpeg(self) -> str | None:
         """Find ffmpeg executable"""
