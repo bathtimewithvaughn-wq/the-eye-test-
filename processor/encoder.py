@@ -308,6 +308,7 @@ class VideoProcessor:
         
         # Logo overlay - bottom left
         if self.add_logo and self.LOGO_PATH.exists():
+            print(f"[DEBUG] Logo found at: {self.LOGO_PATH}")
             cmd.extend(['-i', str(input_path), '-i', str(self.LOGO_PATH)])
             
             logo_x = self.LOGO_MARGIN
@@ -318,8 +319,10 @@ class VideoProcessor:
                 f'[1:v]scale={self.LOGO_SIZE}:{self.LOGO_SIZE}[logo];'
                 f'[main][logo]overlay={logo_x}:{logo_y}:format=auto[final]'
             )
+            print(f"[DEBUG] Filter complex: {filter_complex}")
             cmd.extend(['-filter_complex', filter_complex, '-map', '[final]'])
         else:
+            print(f"[DEBUG] No logo - using simple -vf filter")
             cmd.extend(['-i', str(input_path), '-vf', video_filter_str])
         
         # Video encoding
@@ -340,9 +343,16 @@ class VideoProcessor:
         cmd.append(str(output_path))
         
         creationflags = subprocess.BELOW_NORMAL_PRIORITY_CLASS if sys.platform == 'win32' else 0
+        
+        # Debug: Log the full FFmpeg command
+        print(f"[DEBUG] FFmpeg command: {' '.join(cmd)}")
+        
         result = subprocess.run(cmd, capture_output=True, text=True, creationflags=creationflags)
         
         if result.returncode != 0:
+            print(f"[ERROR] FFmpeg failed with code {result.returncode}")
+            print(f"[ERROR] FFmpeg stderr: {result.stderr}")
+            print(f"[ERROR] FFmpeg stdout: {result.stdout}")
             raise RuntimeError(f"FFmpeg failed: {result.stderr}")
     
     def run(self, progress_callback=None):
