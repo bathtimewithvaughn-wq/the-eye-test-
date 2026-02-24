@@ -184,7 +184,7 @@ class VideoProcessor:
     def _apply_cartoon_opencv(self, input_path: str, output_path: str, progress_callback=None) -> bool:
         """
         Apply cartoon edge detection using OpenCV.
-        Replicates the working process_sky_sports.py approach.
+        Processes at 720p for CPU efficiency, FFmpeg upscales to 1080p.
         """
         cap = cv2.VideoCapture(input_path)
         if not cap.isOpened():
@@ -197,6 +197,10 @@ class VideoProcessor:
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
+        # Process at 720p for lower CPU load, FFmpeg will upscale
+        process_height = 720
+        process_width = int(width * (process_height / height))
+        
         # Apply trim if specified
         skip_frames = int(fps * self.trim_seconds)
         if skip_frames > 0:
@@ -205,9 +209,9 @@ class VideoProcessor:
         else:
             frames_to_process = total_frames
         
-        # Setup video writer
+        # Setup video writer at 720p
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        out = cv2.VideoWriter(output_path, fourcc, fps, (process_width, process_height))
         
         if not out.isOpened():
             print(f"[ERROR] Cannot create output: {output_path}")
@@ -224,7 +228,7 @@ class VideoProcessor:
         prev_edges = None
         frame_count = 0
         
-        print(f"[DEBUG] OpenCV cartoon: {width}x{height} @ {fps}fps, {frames_to_process} frames")
+        print(f"[DEBUG] OpenCV cartoon: {process_width}x{process_height} (from {width}x{height}), {frames_to_process} frames")
         
         while frame_count < frames_to_process:
             if self._cancelled:
@@ -236,8 +240,11 @@ class VideoProcessor:
             if not ret:
                 break
             
+            # Downscale to 720p for processing
+            frame_small = cv2.resize(frame, (process_width, process_height), interpolation=cv2.INTER_AREA)
+            
             # Convert to grayscale for edge detection
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            gray = cv2.cvtColor(frame_small, cv2.COLOR_BGR2GRAY)
             
             # Blur to reduce noise
             blurred = cv2.GaussianBlur(gray, (blur_size, blur_size), 0)
@@ -260,7 +267,7 @@ class VideoProcessor:
             edge_colored = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
             
             # KEY: addWeighted preserves original frame color, adds edges at opacity
-            cartoon_frame = cv2.addWeighted(frame, 1.0, edge_colored, edge_opacity, 0)
+            cartoon_frame = cv2.addWeighted(frame_small, 1.0, edge_colored, edge_opacity, 0)
             
             # Grain moved to FFmpeg for speed (was slow in Python)
             
@@ -276,7 +283,7 @@ class VideoProcessor:
         cap.release()
         out.release()
         
-        print(f"[DEBUG] OpenCV complete: {frame_count} frames")
+        print(f"[DEBUG] OpenCV complete: {frame_count} frames at 720p")
         return True
     
     def _apply_ffmpeg_filters(self, input_path: str, output_path: str, width: int, height: int) -> bool:
@@ -341,6 +348,9 @@ class VideoProcessor:
         if grain_strength > 0:
             filters.append(f"noise=alls={grain_strength}:allf=t")
         
+        # Upscale from 720p back to original resolution
+        filters.append(f"scale={width}:{height}:flags=lanczos")
+        
         # Speed change is handled via setpts in filter
         speed = self.COPYRIGHT_AVOIDANCE['speed']
         setpts_val = 1.0 / speed  # e.g., 1/1.12 = 0.893
@@ -378,7 +388,6 @@ class VideoProcessor:
                 '-filter_complex', filter_complex,
                 '-c:v', video_codec,
                 *video_args,
-                '-threads', '4',  # Limit threads for lower temps
                 '-c:a', 'aac',
                 '-b:a', '128k',
                 '-af', 'volume=0',
@@ -393,7 +402,6 @@ class VideoProcessor:
                 '-vf', filter_str,
                 '-c:v', video_codec,
                 *video_args,
-                '-threads', '4',  # Limit threads for lower temps
                 '-c:a', 'aac',
                 '-b:a', '128k',
                 '-af', 'volume=0',
