@@ -18,13 +18,13 @@ from utils.storage import check_disk_space, format_size
 class VideoProcessor:
     """Process video with cartoon effect, black bars, filters, and effects"""
     
-    # Cartoon effect settings (optimized for speed - ~3x processing)
+    # Cartoon effect settings (optimized for lower CPU temps)
     CARTOON_SETTINGS = {
-        'blur_size': 5,           # Reduced from 7 for ~10% speed gain
-        'canny_low': 30,
-        'canny_high': 70,
+        'blur_size': 3,           # Reduced from 5 for ~15% less CPU
+        'canny_low': 75,          # Increased from 30 for fewer edges
+        'canny_high': 200,        # Increased from 70 for fewer edges
         'edge_opacity': 0.25,
-        'temporal_weight': 1.0,   # 100% current frame (no temporal smoothing) - ~30% speed gain
+        'temporal_weight': 1.0,   # 100% current frame (no temporal smoothing)
     }
     
     FILTER_PRESETS = {
@@ -197,10 +197,6 @@ class VideoProcessor:
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
-        # Process at 720p for lower CPU load, FFmpeg will upscale
-        process_height = 720
-        process_width = int(width * (process_height / height))
-        
         # Apply trim if specified
         skip_frames = int(fps * self.trim_seconds)
         if skip_frames > 0:
@@ -209,9 +205,9 @@ class VideoProcessor:
         else:
             frames_to_process = total_frames
         
-        # Setup video writer at 720p
+        # Setup video writer at full resolution
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(output_path, fourcc, fps, (process_width, process_height))
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
         
         if not out.isOpened():
             print(f"[ERROR] Cannot create output: {output_path}")
@@ -228,7 +224,7 @@ class VideoProcessor:
         prev_edges = None
         frame_count = 0
         
-        print(f"[DEBUG] OpenCV cartoon: {process_width}x{process_height} (from {width}x{height}), {frames_to_process} frames")
+        print(f"[DEBUG] OpenCV cartoon: {width}x{height} @ {fps}fps, {frames_to_process} frames")
         
         while frame_count < frames_to_process:
             if self._cancelled:
@@ -240,11 +236,8 @@ class VideoProcessor:
             if not ret:
                 break
             
-            # Downscale to 720p for processing
-            frame_small = cv2.resize(frame, (process_width, process_height), interpolation=cv2.INTER_AREA)
-            
             # Convert to grayscale for edge detection
-            gray = cv2.cvtColor(frame_small, cv2.COLOR_BGR2GRAY)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             
             # Blur to reduce noise
             blurred = cv2.GaussianBlur(gray, (blur_size, blur_size), 0)
@@ -267,7 +260,7 @@ class VideoProcessor:
             edge_colored = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
             
             # KEY: addWeighted preserves original frame color, adds edges at opacity
-            cartoon_frame = cv2.addWeighted(frame_small, 1.0, edge_colored, edge_opacity, 0)
+            cartoon_frame = cv2.addWeighted(frame, 1.0, edge_colored, edge_opacity, 0)
             
             # Grain moved to FFmpeg for speed (was slow in Python)
             
@@ -283,7 +276,7 @@ class VideoProcessor:
         cap.release()
         out.release()
         
-        print(f"[DEBUG] OpenCV complete: {frame_count} frames at 720p")
+        print(f"[DEBUG] OpenCV complete: {frame_count} frames")
         return True
     
     def _apply_ffmpeg_filters(self, input_path: str, output_path: str, width: int, height: int) -> bool:
@@ -295,9 +288,6 @@ class VideoProcessor:
         
         # Build filter chain for -vf (simple filters)
         filters = []
-        
-        # Upscale from 720p back to original resolution FIRST
-        filters.append(f"scale={width}:{height}:flags=lanczos")
         
         # Color filter
         if self.filter_name in self.FILTER_PRESETS:
