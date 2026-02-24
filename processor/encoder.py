@@ -294,14 +294,13 @@ class VideoProcessor:
         
         video_filter_str = ','.join(filters)
         
-        # Thermal management
+        # Thermal management - use 4 threads for safe temps across all systems
         temp = self._get_cpu_temp()
         if temp > 68:
             preset = 'slow'
-            x264_opts = 'frame-threads=1:sliced-threads=1'
         else:
             preset = 'medium'
-            x264_opts = ''
+        x264_opts = 'threads=4'
         
         # Build command
         cmd = ['ffmpeg', '-y']
