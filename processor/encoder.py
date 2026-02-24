@@ -18,13 +18,13 @@ from utils.storage import check_disk_space, format_size
 class VideoProcessor:
     """Process video with cartoon effect, black bars, filters, and effects"""
     
-    # Cartoon effect settings (optimized for lower CPU temps)
+    # Cartoon effect settings (restored for quality)
     CARTOON_SETTINGS = {
-        'blur_size': 3,           # Reduced from 5 for ~15% less CPU
-        'canny_low': 75,          # Increased from 30 for fewer edges
-        'canny_high': 200,        # Increased from 70 for fewer edges
+        'blur_size': 5,           # Back to 5 for smoother edges
+        'canny_low': 40,          # Lower = more edges detected
+        'canny_high': 100,        # Lower = more edges detected
         'edge_opacity': 0.25,
-        'temporal_weight': 1.0,   # 100% current frame (no temporal smoothing)
+        'temporal_weight': 1.0,   # No temporal smoothing
     }
     
     FILTER_PRESETS = {
@@ -358,7 +358,7 @@ class VideoProcessor:
         # Check if libx264 is available for H.264 encoding (smaller files)
         has_h264 = self._check_codec_available(ffmpeg_path, 'libx264')
         video_codec = 'libx264' if has_h264 else 'mpeg4'
-        video_args = ['-crf', '23', '-preset', 'fast'] if has_h264 else ['-q:v', '3']
+        video_args = ['-crf', '23', '-preset', 'slow'] if has_h264 else ['-q:v', '3']
         
         print(f"[DEBUG] Using video codec: {video_codec}")
         
@@ -378,6 +378,7 @@ class VideoProcessor:
                 '-filter_complex', filter_complex,
                 '-c:v', video_codec,
                 *video_args,
+                '-x264opts', 'frame-threads=1:sliced-threads=1',
                 '-c:a', 'aac',
                 '-b:a', '128k',
                 '-af', 'volume=0',
@@ -392,6 +393,7 @@ class VideoProcessor:
                 '-vf', filter_str,
                 '-c:v', video_codec,
                 *video_args,
+                '-x264opts', 'frame-threads=1:sliced-threads=1',
                 '-c:a', 'aac',
                 '-b:a', '128k',
                 '-af', 'volume=0',
@@ -403,11 +405,12 @@ class VideoProcessor:
             env = os.environ.copy()
             env['PYTHONIOENCODING'] = 'utf-8'
             
-            # Hide console window on Windows
+            # Hide console window on Windows and set low priority
             startupinfo = None
             if os.name == 'nt':
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.dwFlags |= subprocess.BELOW_NORMAL_PRIORITY_CLASS
             
             process = subprocess.Popen(
                 cmd,
