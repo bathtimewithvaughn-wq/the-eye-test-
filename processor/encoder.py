@@ -378,13 +378,17 @@ class VideoProcessor:
                 '-filter_complex', filter_complex,
                 '-c:v', video_codec,
                 *video_args,
-                '-x264opts', 'frame-threads=1:sliced-threads=1',
+            ]
+            # x264-specific options
+            if has_h264:
+                cmd.extend(['-x264opts', 'frame-threads=1:sliced-threads=1'])
+            cmd.extend([
                 '-c:a', 'aac',
                 '-b:a', '128k',
                 '-af', 'volume=0',
                 '-movflags', '+faststart',
                 output_path
-            ]
+            ])
         else:
             # No logo, use simple -vf
             cmd = [
@@ -393,13 +397,17 @@ class VideoProcessor:
                 '-vf', filter_str,
                 '-c:v', video_codec,
                 *video_args,
-                '-x264opts', 'frame-threads=1:sliced-threads=1',
+            ]
+            # x264-specific options
+            if has_h264:
+                cmd.extend(['-x264opts', 'frame-threads=1:sliced-threads=1'])
+            cmd.extend([
                 '-c:a', 'aac',
                 '-b:a', '128k',
                 '-af', 'volume=0',
                 '-movflags', '+faststart',
                 output_path
-            ]
+            ])
         
         try:
             env = os.environ.copy()
