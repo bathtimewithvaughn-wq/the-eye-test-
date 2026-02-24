@@ -175,7 +175,13 @@ class VideoDownloader:
         ffmpeg_path = shutil.which("ffmpeg")
         if ffmpeg_path:
             return ffmpeg_path
-        
+
+        # Check app's own directory (for packaged releases)
+        app_dir = Path(__file__).parent.parent  # Go up from processor/ to app root
+        app_ffmpeg = app_dir / "ffmpeg.exe"
+        if app_ffmpeg.exists():
+            return str(app_ffmpeg)
+
         # Check common Windows locations
         common_paths = [
             r"C:\ffmpeg\bin\ffmpeg.exe",
@@ -184,11 +190,11 @@ class VideoDownloader:
             os.path.expandvars(r"%USERPROFILE%\miniconda3\Library\bin\ffmpeg.exe"),
             os.path.expandvars(r"%USERPROFILE%\anaconda3\Library\bin\ffmpeg.exe"),
         ]
-        
+
         for p in common_paths:
             if os.path.exists(p):
                 return p
-        
+
         return None
     
     def download_1080p(self, url: str) -> str | None:
