@@ -351,7 +351,7 @@ class VideoProcessor:
             if progress_callback:
                 progress_callback(5)
             
-            if not check_disk_space(self.output_folder, min_gb=2):
+            if not check_disk_space(str(self.output_folder), required_gb=2.0):
                 raise RuntimeError("Insufficient disk space")
             
             # Download
