@@ -45,14 +45,13 @@ REM Create ZIP
 echo.
 echo Creating ZIP archive...
 cd release
-powershell -Command "& {Compress-Archive -Path 'TheEyeTest' -DestinationPath 'TheEyeTest_v1.0.zip' -Force}"
-cd ..
+powershell -Command "& {Compress-Archive -Path 'TheEyeTest' -DestinationPath 'TheEyeTest_v1.0.1.zip' -Force}"
 
 echo.
 echo ================================
 echo BUILD COMPLETE!
 echo ================================
 echo.
-echo Output: release\TheEyeTest_v1.0.zip
+echo Output: release\TheEyeTest_v1.0.1.zip
 echo.
 pause

@@ -456,21 +456,29 @@ class VideoProcessor:
     
     def _find_ffmpeg(self) -> str | None:
         """Find ffmpeg executable"""
+        # First check system PATH
         ffmpeg_path = shutil.which("ffmpeg")
         if ffmpeg_path:
             return ffmpeg_path
-        
+
+        # Check app's own directory (for packaged releases)
+        app_dir = Path(__file__).parent.parent  # Go up from processor/ to app root
+        app_ffmpeg = app_dir / "ffmpeg.exe"
+        if app_ffmpeg.exists():
+            return str(app_ffmpeg)
+
+        # Check common system paths
         common_paths = [
             os.path.expandvars(r"%USERPROFILE%\miniconda3\Library\bin\ffmpeg.exe"),
             os.path.expandvars(r"%USERPROFILE%\anaconda3\Library\bin\ffmpeg.exe"),
             r"C:\ffmpeg\bin\ffmpeg.exe",
             r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
         ]
-        
+
         for p in common_paths:
             if os.path.exists(p):
                 return p
-        
+
         return None
     
     def _check_codec_available(self, ffmpeg_path: str, codec: str) -> bool:

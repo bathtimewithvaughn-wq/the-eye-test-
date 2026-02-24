@@ -1,4 +1,4 @@
-# The Eye Test v1.0.0 - Release Notes
+# The Eye Test v1.0.1 - Release Notes
 
 **Football Video Processor with Cinematic Effects**
 
@@ -6,9 +6,16 @@
 
 ## Download
 
-**Windows:** `TheEyeTest_v1.0.zip`
+**Windows:** `TheEyeTest_v1.0.1.zip`
 
 Extract and run `TheEyeTest.exe` (or `START.bat`)
+
+---
+
+## v1.0.1 Changes
+
+- **Fixed:** ffmpeg now correctly bundled with release - processing works out of the box
+- App now checks its own folder for ffmpeg before system paths
 
 ---
 
@@ -18,7 +25,7 @@ Extract and run `TheEyeTest.exe` (or `START.bat`)
 TheEyeTest/
 ├── TheEyeTest.exe      # Main application
 ├── START.bat           # Simple launcher
-├── ffmpeg.exe          # Video processing (auto-downloaded)
+├── ffmpeg.exe          # Video processing (bundled)
 ├── ffprobe.exe         # Video analysis
 ├── assets/
 │   └── logo.jpg        # Your logo
