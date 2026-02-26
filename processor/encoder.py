@@ -27,8 +27,8 @@ except ImportError:
 def get_app_dir():
     """Get the app directory - RESOLVED ONCE at module load"""
     if getattr(sys, 'frozen', False):
-        # Bundled: executable directory
-        return Path(sys.executable).parent.resolve()
+        # Bundled with PyInstaller - use temp extraction directory
+        return Path(sys._MEIPASS).resolve()
     else:
         # Development: project root (encoder.py is in processor/, so go up 2 levels)
         return Path(__file__).parent.parent.resolve()
