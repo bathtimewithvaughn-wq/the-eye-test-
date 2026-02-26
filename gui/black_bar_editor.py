@@ -24,12 +24,11 @@ class BlackBarEditor(QWidget):
         self.show()
         self.raise_()
         
-        self.bars = []  # List of QRect
+        self.bars_normalized = []  # Store as normalized 0-1 coordinates
         self.current_bar = None
         self.start_pos = None
         self.on_bar_added = None  # Callback when bar is added
         
-        # Track video widget position
         self.update_geometry()
     
     def update_geometry(self):
@@ -39,57 +38,6 @@ class BlackBarEditor(QWidget):
             self.raise_()
             self.show()
     
-    def paintEvent(self, event):
-        # Only paint if there are bars or currently drawing
-        if not self.bars and not self.current_bar:
-            return  # Don't paint anything - keep completely transparent
-            
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        
-        # Draw existing bars
-        for bar in self.bars:
-            painter.fillRect(bar, QColor(0, 0, 0, 220))
-            painter.setPen(QPen(QColor(255, 255, 0), 2))
-            painter.drawRect(bar)
-        
-        # Draw current dragging bar
-        if self.current_bar:
-            painter.fillRect(self.current_bar, QColor(0, 255, 0, 100))  # Green semi-transparent while drawing
-            painter.setPen(QPen(QColor(255, 255, 0), 2, Qt.DashLine))
-            painter.drawRect(self.current_bar)
-    
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton and len(self.bars) < 5:  # Max 5 bars
-            self.start_pos = event.pos()
-            self.current_bar = QRect(self.start_pos, self.start_pos)
-        elif event.button() == Qt.RightButton and self.bars:
-            # Delete last bar on right-click
-            self.bars.pop()
-            self.update()
-            if self.on_bar_added:
-                self.on_bar_added(len(self.bars))
-    
-    def mouseMoveEvent(self, event):
-        if self.start_pos:
-            self.current_bar = QRect(self.start_pos, event.pos()).normalized()
-            self.repaint()  # Force immediate repaint
-    
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton and self.current_bar:
-            if self.current_bar.width() > 5 and self.current_bar.height() > 5:
-                self.bars.append(self.current_bar)
-                # Emit bar count changed
-                if hasattr(self, 'on_bar_added') and self.on_bar_added:
-                    self.on_bar_added(len(self.bars))
-            self.current_bar = None
-            self.start_pos = None
-            self.repaint()  # Force immediate repaint
-    
-    def clear_bars(self):
-        self.bars.clear()
-        self.update()
-    
     def _get_video_rect(self):
         """Get the actual pixel rect where the video is rendering inside the view"""
         if not hasattr(self, 'video_frame') or not hasattr(self.video_frame, 'video_item'):
@@ -97,10 +45,17 @@ class BlackBarEditor(QWidget):
             
         view = self.video_frame
         item = view.video_item
-        rect = item.boundingRect()
         
-        # QGraphicsVideoItem maintains aspect ratio
-        video_ratio = 16 / 9  # Standard HD ratio
+        # Get the DISPLAY size (what the user actually sees)
+        display_rect = item.boundingRect()
+        display_width = int(display_rect.width())
+        display_height = int(display_rect.height())
+        
+        if display_width <= 0 or display_height <= 0:
+            return self.rect()
+        
+        # Calculate aspect ratio from display size
+        video_ratio = display_width / display_height if display_height > 0 else 16/9
         view_ratio = view.width() / view.height() if view.height() > 0 else video_ratio
         
         if view_ratio > video_ratio:
@@ -118,48 +73,81 @@ class BlackBarEditor(QWidget):
             
         return QRect(int(x_offset), int(y_offset), int(actual_width), int(actual_height))
     
-    def get_bars(self):
-        """Return bars as normalized coordinates relative to actual video"""
-        normalized = []
+    def paintEvent(self, event):
+        if not self.bars_normalized and not self.current_bar:
+            return
+            
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
         video_rect = self._get_video_rect()
         
-        for bar in self.bars:
-            # Map bar from full widget coordinates to video-only coordinates
-            x_rel = max(0, bar.x() - video_rect.x())
-            y_rel = max(0, bar.y() - video_rect.y())
+        # Draw stored bars - convert normalized to widget coords fresh each time
+        for bar in self.bars_normalized:
+            widget_x = int(bar['x'] * video_rect.width()) + video_rect.x()
+            widget_y = int(bar['y'] * video_rect.height()) + video_rect.y()
+            widget_w = int(bar['width'] * video_rect.width())
+            widget_h = int(bar['height'] * video_rect.height())
+            widget_bar = QRect(widget_x, widget_y, widget_w, widget_h)
             
-            # Normalize based on the actual video width/height
-            norm_x = x_rel / video_rect.width()
-            norm_y = y_rel / video_rect.height()
-            norm_w = bar.width() / video_rect.width()
-            norm_h = bar.height() / video_rect.height()
-            
-            normalized.append({
-                'x': max(0.0, min(1.0, norm_x)),
-                'y': max(0.0, min(1.0, norm_y)),
-                'width': max(0.01, min(1.0, norm_w)),
-                'height': max(0.01, min(1.0, norm_h))
-            })
-            
-        return normalized
+            painter.fillRect(widget_bar, QColor(0, 0, 0, 220))
+            painter.setPen(QPen(QColor(255, 255, 0), 2))
+            painter.drawRect(widget_bar)
+        
+        # Draw current dragging bar (already in widget coords)
+        if self.current_bar:
+            painter.fillRect(self.current_bar, QColor(0, 255, 0, 100))
+            painter.setPen(QPen(QColor(255, 255, 0), 2, Qt.DashLine))
+            painter.drawRect(self.current_bar)
+    
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and len(self.bars_normalized) < 5:
+            self.start_pos = event.pos()
+            self.current_bar = QRect(self.start_pos, self.start_pos)
+        elif event.button() == Qt.RightButton and self.bars_normalized:
+            self.bars_normalized.pop()
+            self.update()
+            if self.on_bar_added:
+                self.on_bar_added(len(self.bars_normalized))
+    
+    def mouseMoveEvent(self, event):
+        if self.start_pos:
+            self.current_bar = QRect(self.start_pos, event.pos()).normalized()
+            self.repaint()
+    
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and self.current_bar:
+            if self.current_bar.width() > 5 and self.current_bar.height() > 5:
+                # Convert to normalized immediately and store
+                video_rect = self._get_video_rect()
+                norm_bar = {
+                    'x': (self.current_bar.x() - video_rect.x()) / video_rect.width(),
+                    'y': (self.current_bar.y() - video_rect.y()) / video_rect.height(),
+                    'width': self.current_bar.width() / video_rect.width(),
+                    'height': self.current_bar.height() / video_rect.height()
+                }
+                self.bars_normalized.append(norm_bar)
+                
+                if hasattr(self, 'on_bar_added') and self.on_bar_added:
+                    self.on_bar_added(len(self.bars_normalized))
+            self.current_bar = None
+            self.start_pos = None
+            self.repaint()
+    
+    def clear_bars(self):
+        self.bars_normalized.clear()
+        self.update()
+    
+    def get_bars(self):
+        """Return bars as normalized coordinates"""
+        return self.bars_normalized.copy()
     
     def set_bars(self, bars):
-        """Load bars from normalized coordinates relative to actual video"""
-        self.bars.clear()
-        video_rect = self._get_video_rect()
-        
-        for bar in bars:
-            # Map normalized video coordinates back to full widget pixel coordinates
-            actual_x = int((bar['x'] * video_rect.width()) + video_rect.x())
-            actual_y = int((bar['y'] * video_rect.height()) + video_rect.y())
-            actual_w = int(bar['width'] * video_rect.width())
-            actual_h = int(bar['height'] * video_rect.height())
-            
-            rect = QRect(actual_x, actual_y, actual_w, actual_h)
-            self.bars.append(rect)
+        """Load bars from normalized coordinates"""
+        self.bars_normalized = bars.copy() if bars else []
         self.update()
     
     def undo_last(self):
-        if self.bars:
-            self.bars.pop()
+        if self.bars_normalized:
+            self.bars_normalized.pop()
             self.update()

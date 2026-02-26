@@ -3,6 +3,7 @@ Main application window
 """
 
 import os
+import sys
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QMessageBox, QStackedWidget, QApplication, QProgressBar,
@@ -17,6 +18,17 @@ from gui.controls import ControlsPanel
 from processor.downloader import VideoDownloader
 import json
 from pathlib import Path
+
+
+def get_resource_path(relative_path: str) -> Path:
+    """Get correct path for resources, works for bundled and development"""
+    if getattr(sys, 'frozen', False):
+        # Bundled - use exe directory
+        base_path = Path(sys.executable).parent
+    else:
+        # Development - use module directory
+        base_path = Path(__file__).parent.parent
+    return base_path / relative_path
 
 
 class DownloadThread(QThread):
@@ -135,7 +147,7 @@ class MainWindow(QMainWindow):
         
         # Logo placeholder
         self.logo_label = QLabel()
-        logo_path = Path("assets/logo.jpg")
+        logo_path = get_resource_path("assets/logo.jpg")
         if logo_path.exists():
             pixmap = QPixmap(str(logo_path))
             self.logo_label.setPixmap(pixmap.scaled(640, 360, Qt.KeepAspectRatio, Qt.SmoothTransformation))
@@ -195,7 +207,7 @@ class MainWindow(QMainWindow):
         
         # Scale logo pixmap to fit available space
         if hasattr(self, 'logo_label') and self.logo_label.pixmap():
-            logo_path = Path("assets/logo.jpg")
+            logo_path = get_resource_path("assets/logo.jpg")
             if logo_path.exists():
                 pixmap = QPixmap(str(logo_path))
                 scaled = pixmap.scaled(
